@@ -1,0 +1,110 @@
+!pip install pandas
+!pip install matplotlib seaborn statsmodels
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+import seaborn as sns
+
+a. Import time series data
+url = 'https://raw.githubusercontent.com/selva86/datasets/master/a10.csv'
+df = pd.read_csv(url, parse_dates=['date'], index_col='date')
+df.head()
+
+b. Visualizing the time series
+df['value'].plot(title='Monthly Sales Time Series', figsize=(10,6))
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.show()
+
+c. Seasonal plot
+df['month'] = df.index.month
+sns.lineplot(data=df, x='month', y='value')
+plt.title("Seasonal Pattern (Monthly)")
+plt.show()
+
+d. Boxplot: Month-wise & Year-wise distribution
+df['year'] = df.index.year
+plt.figure(figsize=(14,6))
+sns.boxplot(x='month', y='value', data=df)
+plt.title("Month-wise Boxplot")
+plt.show()
+
+plt.figure(figsize=(14,6))
+sns.boxplot(x='year', y='value', data=df)
+plt.title("Year-wise Boxplot")
+plt.xticks(rotation=45)
+plt.show()
+
+e. Patterns in the Time Series
+# Plot all components from seasonal decomposition
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+result = seasonal_decompose(df['value'], model='multiplicative')
+result.plot()
+plt.suptitle("Pattern Components: Trend, Seasonality, and Residual", fontsize=14)
+plt.show()
+
+f. Additive and Multiplicative Decomposition
+result_add = seasonal_decompose(df['value'], model='additive')
+result_add.plot()
+plt.suptitle("Additive Decomposition")
+plt.show()
+
+result_mul = seasonal_decompose(df['value'], model='multiplicative')
+result_mul.plot()
+plt.suptitle("Multiplicative Decomposition")
+plt.show()
+
+g. Identify Stationarity (ADF Test)
+from statsmodels.tsa.stattools import adfuller
+
+result = adfuller(df['value'].dropna())
+print('ADF Statistic:', result[0])
+print('p-value:', result[1])
+print('Critical Values:', result[4])
+
+if result[1] < 0.05:
+    print("✅ The series is likely stationary.")
+else:
+    print("❌ The series is likely non-stationary.")
+
+h. Make Non-Stationary Series Stationary (Differencing)
+df['value_diff'] = df['value'] - df['value'].shift(1)
+df['value_diff'].dropna().plot(title='Differenced Series')
+plt.show()
+
+# Test again
+result_diff = adfuller(df['value_diff'].dropna())
+print('ADF Statistic (Differenced):', result_diff[0])
+print('p-value:', result_diff[1])
+
+ i. Detrend a Time Series
+from scipy.signal import detrend
+
+df['detrended'] = detrend(df['value'].values)
+plt.plot(df.index, df['detrended'])
+plt.title("Detrended Time Series")
+plt.show()
+
+j. Deseasonalize a Time Series
+# Remove seasonal component from multiplicative model
+seasonal = result_mul.seasonal
+deseasonalized = df['value'] / seasonal
+deseasonalized.plot(title="Deseasonalized Series")
+plt.show()
+
+k. Test for Seasonality (Autocorrelation Plot)
+from pandas.plotting import autocorrelation_plot
+
+autocorrelation_plot(df['value'])
+plt.title("Autocorrelation Plot")
+plt.show()
+
+l. Test for Seasonality
+import numpy as np
+seasonal_var = np.var(result_additive.seasonal.dropna())
+total_var = np.var(df['value'])
+seasonality_strength = seasonal_var / total_var
+
+print(f"Strength of seasonality: {seasonality_strength:.2f}")

@@ -1,0 +1,66 @@
+!pip install pyspark
+
+# Setup Spark Session
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("NASA Web Logs Analysis").getOrCreate()
+
+# Load the log file (Replace with local filename if needed)
+log_file_path = "access_log.txt"
+raw_data = spark.read.text(log_file_path)
+raw_data.show(5, truncate=False)
+# Extract useful columns using regex
+from pyspark.sql.functions import regexp_extract, to_date, col, count, desc, hour
+host_pattern = r'^(\S+)'  
+timestamp_pattern = r'\[(.*?)\]'  
+method_endpoint_pattern = r'\"(GET|POST|HEAD|PUT|DELETE)\s(\S+)\s'  
+status_pattern = r'(\d{3})'  
+content_size_pattern = r'(\d+)$'  
+
+logs_df = raw_data.withColumn("host", regexp_extract("value", host_pattern, 1)) \
+    .withColumn("timestamp", regexp_extract("value", timestamp_pattern, 1)) \
+    .withColumn("endpoint", regexp_extract("value", method_endpoint_pattern, 2)) \
+    .withColumn("status", regexp_extract("value", status_pattern, 1).cast("int")) \
+    .withColumn("content_size", regexp_extract("value", content_size_pattern, 1).cast("int"))
+logs_df.show(5)
+
+### a. Compute statistics regarding the average, minimum, and maximum content sizes
+logs_df.select('content_size').summary().show()
+
+b. Perform HTTP status code analysis
+logs_df.groupBy('status').count().orderBy('status').show()
+
+c. Top 10 most frequent hosts
+logs_df.groupBy("host").count().orderBy(desc("count")).show(10, truncate=False)
+
+d. Top 20 most frequent endpoints
+logs_df.groupBy("endpoint").count().orderBy(desc("count")).show(20, truncate=False)
+
+e. Top 10 error (status 4xx/5xx) endpoints
+logs_df.filter(col("status") >= 400).groupBy("endpoint").count().orderBy(desc("count")).show(10, truncate=False)
+
+f. Number of unique hosts in two months
+logs_df.select("host").distinct().count()
+
+g. Average number of requests per host per day
+logs_df = logs_df.withColumn("date", to_date("timestamp", "dd/MMM/yyyy:HH:mm:ss"))
+daily_requests = logs_df.groupBy("date", "host").count()
+daily_avg = daily_requests.groupBy("date").agg({"count": "avg"}).orderBy("date")
+daily_avg.show(10)
+
+h. Top 20 endpoints that returned 404
+logs_df.filter(col("status") == 404).groupBy("endpoint").count().orderBy(desc("count")).show(20)
+
+i. Top 20 hosts causing 404 errors
+logs_df.filter(col("status") == 404).groupBy("host").count().orderBy(desc("count")).show(20)
+
+j. Visualizing 404 errors per day
+logs_404 = logs_df.filter(col("status") == 404)
+errors_per_day = logs_404.groupBy("date").count().orderBy("date")
+errors_per_day.toPandas().plot(x='date', y='count', kind='line', figsize=(12,6), title='404 Errors per Day')
+
+k. Top 3 days with most 404 errors
+errors_per_day.orderBy(desc("count")).show(3)
+
+l. Visualizing hourly 404 errorslogs_404 = logs_404.withColumn("hour", hour("timestamp"))
+errors_per_hour = logs_404.groupBy("hour").count().orderBy("hour")
+errors_per_hour.toPandas().plot(x='hour', y='count', kind='bar', figsize=(12,6), title='404 Errors by Hour')
